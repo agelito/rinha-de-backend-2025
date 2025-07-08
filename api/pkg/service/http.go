@@ -9,6 +9,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
+
+	"github.com/gofiber/fiber/v2/middleware/healthcheck"
 )
 
 type HttpService struct {
@@ -23,9 +25,7 @@ func NewHttpService(payments *handler.PaymentsHandler) *HttpService {
 	app.Use(recover.New())
 	app.Use(helmet.New())
 
-	app.Get("/status", func(c *fiber.Ctx) error {
-		return c.Status(fiber.StatusOK).SendString("OK")
-	})
+	app.Use(healthcheck.New())
 
 	app.Post("/payments", func(c *fiber.Ctx) error {
 		var payment model.Payment
