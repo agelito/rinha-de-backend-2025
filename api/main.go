@@ -1,7 +1,15 @@
 package main
 
-import "fmt"
+import (
+	"log"
+
+	"github.com/agelito/rinha-de-backend-2025/api/pkg/service"
+)
 
 func main() {
-	fmt.Println("Hello, World!")
+	httpService := service.NewHttpService()
+
+	if err := httpService.Run(":3001"); err != nil {
+		log.Fatal(err)
+	}
 }
