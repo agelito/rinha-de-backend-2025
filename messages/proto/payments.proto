@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option go_package = "payments/;payments";
+
+package payments;
+
+message Payment {
+  string correlation_id = 1;
+  string amount = 2;
+}
