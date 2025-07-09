@@ -5,10 +5,19 @@ import (
 
 	"github.com/agelito/rinha-de-backend-2025/api/pkg/handler"
 	"github.com/agelito/rinha-de-backend-2025/api/pkg/service"
+	"github.com/nats-io/nats.go"
 )
 
 func main() {
-	payments := handler.NewPaymentsHandler()
+	nc, err := nats.Connect(nats.DefaultURL)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer nc.Close()
+
+	payments := handler.NewPaymentsHandler(nc)
 	httpService := service.NewHttpService(payments)
 
 	if err := httpService.Run(":3001"); err != nil {
