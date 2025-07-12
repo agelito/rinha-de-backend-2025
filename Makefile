@@ -3,3 +3,18 @@ benchmark:
 
 proto:
 	protoc --go_out=./messages/model ./messages/proto/payments.proto
+
+stop-containers:
+	docker compose -f payment-processors/docker-compose.yml down
+	docker compose down
+
+start-payment-processors:
+	docker compose -f payment-processors/docker-compose.yml up -d
+
+start-backend:
+	docker compose up
+
+run-k6-tests:
+	k6 run tests/rinha.js
+
+test: stop-containers start-payment-processors start-backend run-k6-tests
