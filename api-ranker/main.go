@@ -125,9 +125,6 @@ func main() {
 
 	defer nc.Close()
 
-	ticker := time.NewTicker(CalculateScoreFrequency * time.Second)
-	defer ticker.Stop()
-
 	servers := []string{
 		"http://localhost:8001",
 		"http://localhost:8002",
