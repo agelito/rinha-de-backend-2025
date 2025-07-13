@@ -6,11 +6,18 @@ import (
 	"time"
 
 	"github.com/agelito/rinha-de-backend-2025/api/pkg/model"
+	"github.com/agelito/rinha-de-backend-2025/messages/model/payments"
 	pb "github.com/agelito/rinha-de-backend-2025/messages/model/payments"
 	"github.com/agelito/rinha-de-backend-2025/messages/subjects"
 
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
+)
+
+var (
+	PaymentFailed        = fmt.Errorf("payment processing failed")
+	PaymentTimeout       = fmt.Errorf("payment timed out")
+	PaymentInternalError = fmt.Errorf("internal server error")
 )
 
 type PaymentsHandler struct {
@@ -22,9 +29,12 @@ func NewPaymentsHandler(nc *nats.Conn) *PaymentsHandler {
 }
 
 func (h *PaymentsHandler) Payment(payment *model.Payment) error {
+	requestedAt := time.Now().UTC()
+
 	msg := &pb.Payment{
 		CorrelationId: payment.CorrelationId.String(),
 		Amount:        payment.Amount.String(),
+		RequestedAt:   requestedAt.Format(time.RFC3339),
 	}
 
 	msgBytes, err := proto.Marshal(msg)
@@ -48,21 +58,26 @@ func (h *PaymentsHandler) Payment(payment *model.Payment) error {
 		return err
 	}
 
-	if !h.waitForChannelMessage(ch) {
-		return fmt.Errorf("timed out waiting for `%v` to process", payment.CorrelationId)
-	}
-
-	return nil
+	return h.waitForPaymentResult(ch)
 }
 
-func (h *PaymentsHandler) waitForChannelMessage(ch chan *nats.Msg) bool {
+func (h *PaymentsHandler) waitForPaymentResult(ch chan *nats.Msg) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	select {
-	case <-ch:
-		return true
+	case msg := <-ch:
+		var result payments.PaymentResult
+		if err := proto.Unmarshal(msg.Data, &result); err != nil {
+			return PaymentInternalError
+		}
+
+		if !result.Successful {
+			return PaymentFailed
+		}
+
+		return nil
 	case <-ctx.Done():
-		return false
+		return PaymentTimeout
 	}
 }
