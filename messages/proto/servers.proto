@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option go_package = "servers/;servers";
+
+package servers;
+
+message ServerScore {
+  string server = 1;
+  int32 score = 2;
+}

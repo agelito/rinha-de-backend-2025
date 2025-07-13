@@ -3,6 +3,7 @@ package subjects
 import "fmt"
 
 const (
+	SubjectServerScore        = "servers.score"
 	SubjectPaymentsProcess    = "payments.process"
 	subjectPaymentsConfirmFmt = "payments.confirm.%s"
 )

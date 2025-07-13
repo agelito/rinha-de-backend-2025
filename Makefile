@@ -3,6 +3,7 @@ benchmark:
 
 proto:
 	protoc --go_out=./messages/model ./messages/proto/payments.proto
+	protoc --go_out=./messages/model ./messages/proto/servers.proto
 
 stop-containers:
 	docker compose -f payment-processors/docker-compose.yml down

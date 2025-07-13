@@ -3,15 +3,20 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"net/http"
 	"time"
+
+	"github.com/agelito/rinha-de-backend-2025/messages/model/servers"
+	"github.com/agelito/rinha-de-backend-2025/messages/subjects"
+	"github.com/charmbracelet/log"
+	"github.com/nats-io/nats.go"
+	"google.golang.org/protobuf/proto"
 )
 
 type ServerScore struct {
 	Server string
-	Score  int
+	Score  int32
 }
 
 type ServerHealthResponse struct {
@@ -20,23 +25,14 @@ type ServerHealthResponse struct {
 }
 
 const (
-	MaxServerResponseTime = 15_000
-	ScoreMultiplier       = 1000
+	CalculateScoreFrequency = 5
+	MaxServerResponseTime   = 10_000
+	ScoreMultiplier         = 1_000
 )
 
 var (
 	client = &http.Client{
-		Timeout: 5 * time.Second,
-	}
-	scores = []ServerScore{
-		{
-			Server: "http://localhost:8001",
-			Score:  0,
-		},
-		{
-			Server: "http://localhost:8002",
-			Score:  0,
-		},
+		Timeout: CalculateScoreFrequency * time.Second,
 	}
 )
 
@@ -66,37 +62,80 @@ func serverHealthRequest(server string) (*ServerHealthResponse, error) {
 		return &ServerHealthResponse{}, err
 	}
 
+	log.Info("service-health", "server", server, "response", healthResponse)
+
 	return &healthResponse, err
 }
 
-func calculateServerScores() {
-	for _, srv := range scores {
-		res, err := serverHealthRequest(srv.Server)
+func calculateServerScore(srv string) int32 {
+	res, err := serverHealthRequest(srv)
+
+	if err != nil {
+		log.Error("service-health request failed", "server", srv, "error", err)
+		return 0
+	}
+
+	score := int32(0)
+
+	if !res.Failing {
+		minResponseTime := int(math.Max(0, math.Min(float64(res.MinResponseTime), float64(MaxServerResponseTime))))
+		mul := 1.0 - float32(minResponseTime)/float32(MaxServerResponseTime)
+
+		score = int32(mul * ScoreMultiplier)
+	}
+
+	log.Info("server score", "server", srv, "score", score)
+
+	return score
+}
+
+func checkServerScoreRepeating(nc *nats.Conn, srv string, freq time.Duration) {
+	ticker := time.NewTicker(freq)
+	defer ticker.Stop()
+
+	for {
+		score := calculateServerScore(srv)
+
+		scoreMsg := servers.ServerScore{
+			Server: srv,
+			Score:  score,
+		}
+
+		msgBytes, err := proto.Marshal(&scoreMsg)
 
 		if err != nil {
-			log.Printf("server health request failed: %v\n", err)
-			srv.Score = 0
+			log.Error("could not serialize score message", "server", srv, "error", err)
 			continue
 		}
 
-		if !res.Failing {
-			minResponseTime := int(math.Max(0, math.Min(float64(res.MinResponseTime), float64(MaxServerResponseTime))))
-			mul := 1.0 - float32(minResponseTime)/float32(MaxServerResponseTime)
-
-			srv.Score = int(mul * ScoreMultiplier)
+		if err := nc.Publish(subjects.SubjectServerScore, msgBytes); err != nil {
+			log.Error("could not publish server score message", "server", srv, "error", err)
 		}
+
+		<-ticker.C
 	}
 }
 
 func main() {
-	ticker := time.NewTicker(5 * time.Second)
+	nc, err := nats.Connect(nats.DefaultURL)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer nc.Close()
+
+	ticker := time.NewTicker(CalculateScoreFrequency * time.Second)
 	defer ticker.Stop()
 
-	for {
-		calculateServerScores()
-
-		fmt.Printf("scores: %v\n", scores)
-
-		<-ticker.C
+	servers := []string{
+		"http://localhost:8001",
+		"http://localhost:8002",
 	}
+
+	for _, srv := range servers {
+		go checkServerScoreRepeating(nc, srv, CalculateScoreFrequency*time.Second)
+	}
+
+	select {}
 }
