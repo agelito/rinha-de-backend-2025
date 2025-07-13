@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/agelito/rinha-de-backend-2025/api/pkg/model"
-	"github.com/agelito/rinha-de-backend-2025/messages/model/payments"
 	pb "github.com/agelito/rinha-de-backend-2025/messages/model/payments"
 	"github.com/agelito/rinha-de-backend-2025/messages/subjects"
 
@@ -67,7 +66,7 @@ func (h *PaymentsHandler) waitForPaymentResult(ch chan *nats.Msg) error {
 
 	select {
 	case msg := <-ch:
-		var result payments.PaymentResult
+		var result pb.PaymentResult
 		if err := proto.Unmarshal(msg.Data, &result); err != nil {
 			return PaymentInternalError
 		}
