@@ -31,17 +31,28 @@ func NewHttpService(payments *handler.PaymentsHandler) *HttpService {
 		var payment model.Payment
 
 		if err := c.BodyParser(&payment); err != nil {
-			log.Errorf("invalid request body: %v", err)
+			log.Error("invalid request body", "error", err)
 			return c.Status(fiber.StatusBadRequest).SendString("invalid payment")
 		}
 
 		if err := payments.Payment(&payment); err != nil {
-			// TODO: Implement better error handling and responses
-			log.Errorf("error creating payment: %v", err)
-			return c.Status(fiber.StatusInternalServerError).SendString("internal server error")
+			log.Error("error handling payment", "error", err)
+
+			switch err {
+			case handler.PaymentFailed:
+				return c.SendStatus(fiber.StatusUnprocessableEntity)
+			case handler.PaymentTimeout:
+				return c.SendStatus(fiber.StatusGatewayTimeout)
+			}
+
+			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 
 		return c.SendStatus(fiber.StatusCreated)
+	})
+
+	app.Get("/payments-summary", func(c *fiber.Ctx) error {
+		return c.Status(fiber.StatusOK).SendString("{}")
 	})
 
 	return &HttpService{

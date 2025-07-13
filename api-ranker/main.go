@@ -63,7 +63,7 @@ func serverHealthRequest(server string) (*ServerHealthResponse, error) {
 		return &ServerHealthResponse{}, err
 	}
 
-	log.Info("service-health", "server", server, "response", healthResponse)
+	log.Debug("service-health", "server", server, "response", healthResponse)
 
 	return &healthResponse, err
 }
@@ -85,7 +85,7 @@ func calculateServerScore(srv string) int32 {
 		score = int32(mul * ScoreMultiplier)
 	}
 
-	log.Info("server score", "server", srv, "score", score)
+	log.Debug("server score", "server", srv, "score", score)
 
 	return score
 }
@@ -153,27 +153,27 @@ func main() {
 				Server: server,
 				Score:  score,
 			})
-
-			sort.Slice(sortedScores, func(i, j int) bool {
-				return sortedScores[i].Score > sortedScores[j].Score
-			})
-
-			serverRanking := &servers.ServerRanking{
-				Servers: sortedScores,
-			}
-
-			msgData, err := proto.Marshal(serverRanking)
-
-			if err != nil {
-				log.Error("could not serialize server ranking", "error", err)
-				continue
-			}
-
-			if err := nc.Publish(subjects.SubjectServerRanking, msgData); err != nil {
-				log.Error("could not publish server rankings message", "error", err)
-			}
-
-			log.Info("server rankings", "servers", sortedScores)
 		}
+
+		sort.Slice(sortedScores, func(i, j int) bool {
+			return sortedScores[i].Score > sortedScores[j].Score
+		})
+
+		serverRanking := &servers.ServerRanking{
+			Servers: sortedScores,
+		}
+
+		msgData, err := proto.Marshal(serverRanking)
+
+		if err != nil {
+			log.Error("could not serialize server ranking", "error", err)
+			continue
+		}
+
+		if err := nc.Publish(subjects.SubjectServerRanking, msgData); err != nil {
+			log.Error("could not publish server rankings message", "error", err)
+		}
+
+		log.Info("server rankings", "servers", sortedScores)
 	}
 }

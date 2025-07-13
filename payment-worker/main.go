@@ -20,5 +20,7 @@ func main() {
 	handler := handler.NewPaymentsHandler(nc)
 	service := service.NewNatsService(nc, handler)
 
-	service.Run()
+	go service.Run()
+
+	handler.Run()
 }

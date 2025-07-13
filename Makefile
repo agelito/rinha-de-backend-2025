@@ -1,5 +1,5 @@
 benchmark:
-	hey -m "POST" -n 1000 -d '{"correlationId": "be463535-0661-413e-b592-a24759b72fc0", "amount": 10.22 }' -H "Content-Type: application/json" http://localhost:3001/payments
+	hey -m "POST" -n 1000 -d '{"correlationId": "be463535-0661-413e-b592-a24759b72fc0", "amount": 10.22 }' -H "Content-Type: application/json" http://localhost:9999/payments
 
 proto:
 	protoc --go_out=./messages/model ./messages/proto/payments.proto
@@ -17,5 +17,9 @@ start-backend:
 
 run-k6-tests:
 	k6 run tests/rinha.js
+
+purge-payments:
+	curl -X POST http://localhost:8001/admin/purge-payments
+	curl -X POST http://localhost:8002/admin/purge-payments
 
 test: stop-containers start-payment-processors start-backend run-k6-tests

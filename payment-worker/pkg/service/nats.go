@@ -2,13 +2,16 @@ package service
 
 import (
 	"context"
-	"log"
+	"time"
 
 	pb "github.com/agelito/rinha-de-backend-2025/messages/model/payments"
 	"github.com/agelito/rinha-de-backend-2025/messages/subjects"
 	"github.com/agelito/rinha-de-backend-2025/payment-worker/pkg/handler"
+	"github.com/agelito/rinha-de-backend-2025/payment-worker/pkg/model"
 	worker "github.com/agelito/rinha-de-backend-2025/payment-worker/pkg/worker"
+	"github.com/charmbracelet/log"
 	"github.com/nats-io/nats.go"
+	"github.com/shopspring/decimal"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -49,12 +52,34 @@ func (s *NatsService) Run() {
 				var paymentMsg pb.Payment
 				if err := proto.Unmarshal(msg.Data, &paymentMsg); err != nil {
 					// TODO: add to dlq for error reporting?
-					log.Printf("error deserializing message: %v\n", err)
+					log.Error("could not deserialize message", "error", err)
+					continue
 				}
 
-				if err := s.handler.ProcessPayment(paymentMsg.CorrelationId, paymentMsg.Amount); err != nil {
-					log.Printf("error processing payment: %v\n", err)
-					// TODO: retry the payment (add to retry queue)
+				amount, err := decimal.NewFromString(paymentMsg.Amount)
+
+				if err != nil {
+					// TODO: add to dlq for error reporting?
+					log.Error("could not parse amount", "error", err)
+					continue
+				}
+
+				requestedAt, err := time.Parse(time.RFC3339, paymentMsg.RequestedAt)
+
+				if err != nil {
+					// TODO: add to dlq for error reporting?
+					log.Error("could not parse requestedAt", "error", err)
+					continue
+				}
+
+				payment := &model.Payment{
+					CorrelationId: paymentMsg.CorrelationId,
+					Amount:        amount,
+					RequestedAt:   requestedAt,
+				}
+
+				if err := s.handler.ProcessPayment(payment); err != nil {
+					log.Error("could not process payment", "error", err)
 				}
 			case <-workerCtx.Done():
 				return

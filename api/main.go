@@ -20,7 +20,7 @@ func main() {
 	payments := handler.NewPaymentsHandler(nc)
 	httpService := service.NewHttpService(payments)
 
-	if err := httpService.Run(":3001"); err != nil {
+	if err := httpService.Run(":9999"); err != nil {
 		log.Fatal(err)
 	}
 }
