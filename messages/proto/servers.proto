@@ -8,3 +8,5 @@ message ServerScore {
   string server = 1;
   int32 score = 2;
 }
+
+message ServerRanking { repeated ServerScore servers = 1; }

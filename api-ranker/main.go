@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/agelito/rinha-de-backend-2025/messages/model/servers"
@@ -89,19 +90,19 @@ func calculateServerScore(srv string) int32 {
 	return score
 }
 
-func checkServerScoreRepeating(nc *nats.Conn, srv string, freq time.Duration) {
+func checkServerScoreRepeating(nc *nats.Conn, srv string, freq time.Duration, ch chan *servers.ServerScore) {
 	ticker := time.NewTicker(freq)
 	defer ticker.Stop()
 
 	for {
 		score := calculateServerScore(srv)
 
-		scoreMsg := servers.ServerScore{
+		scoreMsg := &servers.ServerScore{
 			Server: srv,
 			Score:  score,
 		}
 
-		msgBytes, err := proto.Marshal(&scoreMsg)
+		msgBytes, err := proto.Marshal(scoreMsg)
 
 		if err != nil {
 			log.Error("could not serialize score message", "server", srv, "error", err)
@@ -111,6 +112,8 @@ func checkServerScoreRepeating(nc *nats.Conn, srv string, freq time.Duration) {
 		if err := nc.Publish(subjects.SubjectServerScore, msgBytes); err != nil {
 			log.Error("could not publish server score message", "server", srv, "error", err)
 		}
+
+		ch <- scoreMsg
 
 		<-ticker.C
 	}
@@ -125,14 +128,52 @@ func main() {
 
 	defer nc.Close()
 
-	servers := []string{
+	serverList := []string{
 		"http://localhost:8001",
 		"http://localhost:8002",
 	}
 
-	for _, srv := range servers {
-		go checkServerScoreRepeating(nc, srv, CalculateScoreFrequency*time.Second)
+	ch := make(chan *servers.ServerScore)
+
+	for _, srv := range serverList {
+		go checkServerScoreRepeating(nc, srv, CalculateScoreFrequency*time.Second, ch)
 	}
 
-	select {}
+	scores := make(map[string]int32)
+
+	for {
+		updatedScore := <-ch
+
+		scores[updatedScore.Server] = updatedScore.Score
+
+		var sortedScores []*servers.ServerScore
+
+		for server, score := range scores {
+			sortedScores = append(sortedScores, &servers.ServerScore{
+				Server: server,
+				Score:  score,
+			})
+
+			sort.Slice(sortedScores, func(i, j int) bool {
+				return sortedScores[i].Score > sortedScores[j].Score
+			})
+
+			serverRanking := &servers.ServerRanking{
+				Servers: sortedScores,
+			}
+
+			msgData, err := proto.Marshal(serverRanking)
+
+			if err != nil {
+				log.Error("could not serialize server ranking", "error", err)
+				continue
+			}
+
+			if err := nc.Publish(subjects.SubjectServerRanking, msgData); err != nil {
+				log.Error("could not publish server rankings message", "error", err)
+			}
+
+			log.Info("server rankings", "servers", sortedScores)
+		}
+	}
 }
