@@ -17,7 +17,7 @@ func main() {
 
 	defer nc.Close()
 
-	handler := handler.NewPaymentsHandler()
+	handler := handler.NewPaymentsHandler(nc)
 	service := service.NewNatsService(nc, handler)
 
 	service.Run()

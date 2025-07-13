@@ -1,6 +1,10 @@
 package handler
 
 import (
+	"context"
+	"fmt"
+	"time"
+
 	"github.com/agelito/rinha-de-backend-2025/api/pkg/model"
 	pb "github.com/agelito/rinha-de-backend-2025/messages/model/payments"
 	"github.com/agelito/rinha-de-backend-2025/messages/subjects"
@@ -29,5 +33,36 @@ func (h *PaymentsHandler) Payment(payment *model.Payment) error {
 		return err
 	}
 
-	return h.nc.Publish(subjects.SubjectPaymentsProcess, msgBytes)
+	confirmSubject := subjects.NewPaymentsConfirmChannel(payment.CorrelationId.String())
+
+	ch := make(chan *nats.Msg)
+	sub, err := h.nc.ChanSubscribe(confirmSubject, ch)
+
+	if err != nil {
+		return err
+	}
+
+	defer sub.Unsubscribe()
+
+	if err := h.nc.Publish(subjects.SubjectPaymentsProcess, msgBytes); err != nil {
+		return err
+	}
+
+	if !h.waitForChannelMessage(ch) {
+		return fmt.Errorf("timed out waiting for `%v` to process", payment.CorrelationId)
+	}
+
+	return nil
+}
+
+func (h *PaymentsHandler) waitForChannelMessage(ch chan *nats.Msg) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	select {
+	case <-ch:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
