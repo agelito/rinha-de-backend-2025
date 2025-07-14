@@ -4,3 +4,7 @@ services:
     ports:
       - "4222:4222"
       - "8222:8222"
+    command: ["-c", "/nats.conf"]
+    volumes:
+      - ./nats/nats.conf:/nats.conf
+      - ./nats/data:/data
